@@ -11,7 +11,7 @@ Stream Framer is a Rust crate that provides two traits for adding header prefixe
 
 ## Disclaimers
 - It is a very simplistic crate that currently have no mechanism to handle data coming in a corrupted order.
-I use it in the context of the QUIC protocol (with a http3 frameword based on ```Quiche``` crate), which garantees data order accurracy.
+I use it in the context of the QUIC protocol (with a HTTP/3 framework based on ```Quiche``` crate), which garantees data order accurracy.
 - It can handle truncated frames (e.g. a frame that is distributed between two packets).
 
 ## Example 
