@@ -1,6 +1,10 @@
 pub use stream_frame_parse::{FrameParser, ParsedStreamData};
 pub use stream_frame_writer::FrameWriter;
+const HDR_SIZE: usize = 12; // u32
+const MAGIC_PREFIX: [u8; 8] = [0x00, 0xF1, 0x01, 0xE4, 0x02, 0xFF, 0x03, 0xDD];
 mod stream_frame_writer {
+    use super::MAGIC_PREFIX;
+
     pub trait FrameWriter {
         fn prepend_frame_in_place(&mut self);
         fn prepend_frame(self) -> Vec<u8>;
@@ -13,19 +17,22 @@ mod stream_frame_writer {
 
             let mut frame: Vec<u8> = p_len.to_be_bytes().to_vec();
 
-            frame.append(self);
+            let mut magic_prefix = MAGIC_PREFIX.to_vec();
+            magic_prefix.append(&mut frame);
+            magic_prefix.append(self);
 
-            *self = frame;
+            *self = magic_prefix;
         }
         fn prepend_frame(self) -> Vec<u8> {
             // cast to u32 because usize is to large and to suitable (diffence of size between archs)
             let p_len = self.len() as u32;
 
+            let mut magic_prefix = MAGIC_PREFIX.to_vec();
             let mut frame: Vec<u8> = p_len.to_be_bytes().to_vec();
+            magic_prefix.append(&mut frame);
+            magic_prefix.extend(self);
 
-            frame.extend(self);
-
-            frame
+            magic_prefix
         }
     }
 }
@@ -33,9 +40,10 @@ mod stream_frame_writer {
 mod stream_frame_parse {
     use crate::error::FrameError;
 
+    use super::{HDR_SIZE, MAGIC_PREFIX};
+
     type BodyLen = usize;
     type ReceivedSize = usize;
-    const HDR_SIZE: usize = 4; // u32
     pub trait FrameParser {
         fn parse_frame_header(
             self,
@@ -97,7 +105,8 @@ mod stream_frame_parse {
                     // case 1: total_len > body_len,
                     // case 2: total_len < body_len.
 
-                    let body_total_len = u32::from_be_bytes(hdr);
+                    let encoded_len: [u8; 4] = if let Ok(e_l) = hdr[MAGIC_PREFIX.len()..].try_into() {e_l}else {return Err(())};
+                    let body_total_len = u32::from_be_bytes(encoded_len);
                     let body = data[HDR_SIZE..].to_vec();
 
                     match has_hdr_first(body_total_len as usize, body) {
@@ -199,10 +208,11 @@ mod stream_frame_parse {
         if hdr.len() != HDR_SIZE {
             return false;
         }
-        for i in hdr[..HDR_SIZE - 1].iter() {
-            if *i != 0 {
-                return false;
-            }
+
+        let has_magic_prefix_slice = &hdr[..MAGIC_PREFIX.len()];
+
+        if has_magic_prefix_slice != &MAGIC_PREFIX {
+            return false;
         }
         true
     }
