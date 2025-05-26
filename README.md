@@ -1,6 +1,6 @@
 # Stream Framer
 
-Framing system for streaming protocols written in rust.
+Framing system for streaming protocols.
 
 ## Purpose
 
