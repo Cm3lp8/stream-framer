@@ -39,15 +39,16 @@ mod stream_frame_parse {
     pub trait FrameParser {
         fn parse_frame_header(
             self,
-            last_incomplete_reception: Option<(BodyLen, ReceivedSize)>,
+            last_incomplete_reception: Option<(BodyLen, Vec<u8>)>,
+            is_last_header_truncated: Option<Vec<u8>>,
         ) -> Result<Vec<ParsedStreamData>, ()>;
     }
 
     pub enum ParsedStreamData {
-        IncompleteWithoutHeader(Vec<u8>),
+        IncompleteWithoutHeaderUnFinished(Vec<u8>),
         CompletedWithHeader(usize, Vec<u8>),
-        CompletedWithoutHeader(usize, Vec<u8>), // If the stream started without header first.
         IncompleteWithHeader(usize, Vec<u8>),
+        TruncatedHeader(Vec<u8>),
     }
 
     enum HeaderParsing {
@@ -55,8 +56,7 @@ mod stream_frame_parse {
         OneMessageAndRemains((usize, Vec<u8>), Vec<u8>), // (size_first_msg, data_first_message),
         // remaining data
         DataTooLittle(Vec<u8>),
-        StartWithNoHeaderAndRemains((usize, Vec<u8>), Vec<u8>), // (no header data bytes
-        StartWithNoHeaderAndFinished(usize, Vec<u8>),           // (no header data bytes
+        StartWithNoHeaderAndIncompleted(Vec<u8>), // (no header data bytes
         // size, data_without_header), Option<(hdr->data_size, next_data)>
         None,
     }
@@ -65,21 +65,30 @@ mod stream_frame_parse {
         // decode header, builded with u32 as bytes collection, big endian
         fn parse_frame_header(
             mut self,
-            last_incomplete_reception: Option<(BodyLen, ReceivedSize)>,
+            mut last_incomplete_reception: Option<(BodyLen, Vec<u8>)>,
+            mut is_last_header_truncated: Option<Vec<u8>>,
         ) -> Result<Vec<ParsedStreamData>, ()> {
             let mut output: Vec<ParsedStreamData> = vec![];
             let mut data = std::mem::replace(&mut self, vec![]);
 
             'parse: loop {
-                if data.len() < HDR_SIZE {
-                    output.push(ParsedStreamData::IncompleteWithoutHeader(data));
-                    return Ok(output);
+                // when data is now < HDR_SIZE, implies truncating next header
+                // what if is_last_header_truncated is_some() ? (To resolve)
+                match is_data_size_truncating_next_header(data) {
+                    Truncating::Yes(truncated_hdr) => {
+                        output.push(ParsedStreamData::TruncatedHeader(truncated_hdr));
+                        return Ok(output);
+                    }
+
+                    Truncating::No(data_continue) => {
+                        data = data_continue;
+                    }
                 }
 
-                let hdr: [u8; HDR_SIZE] = if let Ok(hdr) = data[0..HDR_SIZE].try_into() {
-                    hdr
-                } else {
-                    return Err(());
+                // vec len is already verified to be  > HDR_SIZE
+                let hdr = match compose_header_candidat(&data, is_last_header_truncated.take()) {
+                    Ok(hdr) => hdr,
+                    Err(_e) => return Err(()),
                 };
 
                 if is_header(&hdr) {
@@ -105,7 +114,7 @@ mod stream_frame_parse {
                             (first_msg_size, first_msg_data),
                             remaining_data,
                         ) => {
-                            data = remaining_data;
+                            data = remaining_data; // check if remaining data is > hdr size
                             output.push(ParsedStreamData::CompletedWithHeader(
                                 first_msg_size,
                                 first_msg_data,
@@ -130,18 +139,27 @@ mod stream_frame_parse {
                     // It starts with no hdr.
                     // case 3: It has 1 header pattern after some bytes.
 
-                    match has_no_hdr_start(data, last_incomplete_reception) {
+                    match has_no_hdr_start(data, last_incomplete_reception.take()) {
                         Ok(data_parsed) => match data_parsed {
-                            HeaderParsing::StartWithNoHeaderAndRemains(
-                                (size, data_wo_hdr),
-                                remaining,
-                            ) => {
-                                data = remaining;
-                                output.push(ParsedStreamData::IncompleteWithoutHeader(data_wo_hdr));
+                            HeaderParsing::OneMessageAndRemains((size, data_wo_hdr), remaining) => {
+                                data = remaining; // TODO handle case 0.0 => See if hdr is
+                                // truncated
+                                output
+                                    .push(ParsedStreamData::CompletedWithHeader(size, data_wo_hdr));
                             }
                             // Final case
-                            HeaderParsing::StartWithNoHeaderAndFinished(size, data) => {
-                                output.push(ParsedStreamData::IncompleteWithoutHeader(data));
+                            HeaderParsing::Completed(size, completed_data) => {
+                                output.push(ParsedStreamData::CompletedWithHeader(
+                                    size as usize,
+                                    completed_data,
+                                ));
+                                return Ok(output);
+                            }
+                            HeaderParsing::StartWithNoHeaderAndIncompleted(data) => {
+                                // case 2 => if the msg len > stream len
+                                output.push(ParsedStreamData::IncompleteWithoutHeaderUnFinished(
+                                    data,
+                                ));
                                 return Ok(output);
                             }
                             _ => return Err(()),
@@ -152,7 +170,35 @@ mod stream_frame_parse {
             }
         }
     }
+    // verify if there is already a truncated header from the last packet. If yes compose a header
+    // with it, if no, output header size Vec<u8>
+    fn compose_header_candidat(
+        data: &[u8],
+        is_last_header_truncated: Option<Vec<u8>>,
+    ) -> Result<[u8; HDR_SIZE], String> {
+        let output_res: Result<[u8; HDR_SIZE], String> = match is_last_header_truncated {
+            Some(mut hdr_prefix) => {
+                let hdr_suffix_len = HDR_SIZE - hdr_prefix.len();
+
+                let suffix_slice = data[0..hdr_suffix_len].to_vec();
+
+                hdr_prefix.extend(suffix_slice);
+
+                hdr_prefix
+                    .try_into()
+                    .map_err(|_e| "Failed to build [u8] from vec<u8>".to_string())
+            }
+
+            None => data
+                .try_into()
+                .map_err(|_e| "Failed to build [u8] from vec<u8>".to_string()),
+        };
+        output_res
+    }
     fn is_header(hdr: &[u8]) -> bool {
+        if hdr.len() != HDR_SIZE {
+            return false;
+        }
         for i in hdr[..HDR_SIZE - 1].iter() {
             if *i != 0 {
                 return false;
@@ -160,19 +206,49 @@ mod stream_frame_parse {
         }
         true
     }
+    type TruncatedSize = usize;
+    enum Truncating {
+        Yes(Vec<u8>),
+        No(Vec<u8>),
+    }
+    fn is_data_size_truncating_next_header(data: Vec<u8>) -> Truncating {
+        if data.len() < HDR_SIZE {
+            Truncating::Yes(data)
+        } else {
+            Truncating::No(data)
+        }
+    }
     fn has_no_hdr_start(
-        data: Vec<u8>,
-        last_incomplete_reception: Option<(BodyLen, ReceivedSize)>,
+        mut data: Vec<u8>,
+        last_incomplete_reception: Option<(BodyLen, Vec<u8>)>,
     ) -> Result<HeaderParsing, Vec<u8>> {
         match last_incomplete_reception {
-            Some((msg_len, already_received)) => {
+            Some((msg_len, mut already_received)) => {
                 let total_packet_len = data.len();
 
-                let remaining_bytes = msg_len - already_received;
+                // the remaining bytes quantity that we should find in this packet.
+                let remaining_bytes = msg_len - already_received.len();
 
                 // case 0 stream len contains the end of the last incomplete + at least the start
                 // of the following message.
-                Ok(data)
+
+                if remaining_bytes < total_packet_len {
+                    let remaining = data.split_off(remaining_bytes);
+                    already_received.extend(data);
+                    return Ok(HeaderParsing::OneMessageAndRemains(
+                        (msg_len, already_received),
+                        remaining,
+                    ));
+                }
+                if remaining_bytes == total_packet_len {
+                    already_received.extend(data);
+                    return Ok(HeaderParsing::Completed(msg_len, already_received));
+                }
+                already_received.extend(data);
+                // Is extending the last packet 's data
+                Ok(HeaderParsing::StartWithNoHeaderAndIncompleted(
+                    already_received,
+                ))
             }
             None => Err(data),
         }
