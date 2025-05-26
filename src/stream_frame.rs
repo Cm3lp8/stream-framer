@@ -49,7 +49,7 @@ mod stream_frame_parse {
             self,
             last_incomplete_reception: Option<(BodyLen, Vec<u8>)>,
             is_last_header_truncated: Option<Vec<u8>>,
-        ) -> Result<Vec<ParsedStreamData>, ()>;
+        ) -> Result<Vec<ParsedStreamData>, String>;
     }
 
     pub enum ParsedStreamData {
@@ -75,7 +75,7 @@ mod stream_frame_parse {
             mut self,
             mut last_incomplete_reception: Option<(BodyLen, Vec<u8>)>,
             mut is_last_header_truncated: Option<Vec<u8>>,
-        ) -> Result<Vec<ParsedStreamData>, ()> {
+        ) -> Result<Vec<ParsedStreamData>, String> {
             let mut output: Vec<ParsedStreamData> = vec![];
             let mut data = std::mem::replace(&mut self, vec![]);
 
@@ -96,7 +96,7 @@ mod stream_frame_parse {
                 // vec len is already verified to be  > HDR_SIZE
                 let hdr = match compose_header_candidat(&data, is_last_header_truncated.take()) {
                     Ok(hdr) => hdr,
-                    Err(_e) => return Err(()),
+                    Err(e) => return Err(e),
                 };
 
                 if is_header(&hdr) {
@@ -105,7 +105,12 @@ mod stream_frame_parse {
                     // case 1: total_len > body_len,
                     // case 2: total_len < body_len.
 
-                    let encoded_len: [u8; 4] = if let Ok(e_l) = hdr[MAGIC_PREFIX.len()..].try_into() {e_l}else {return Err(())};
+                    let encoded_len: [u8; 4] = if let Ok(e_l) = hdr[MAGIC_PREFIX.len()..].try_into()
+                    {
+                        e_l
+                    } else {
+                        return Err("error decoding header".to_string());
+                    };
                     let body_total_len = u32::from_be_bytes(encoded_len);
                     let body = data[HDR_SIZE..].to_vec();
 
@@ -142,7 +147,7 @@ mod stream_frame_parse {
                             ));
                             return Ok(output);
                         }
-                        _ => return Err(()),
+                        _ => return Err("Other case".to_string()),
                     }
                 } else {
                     // It starts with no hdr.
@@ -171,7 +176,7 @@ mod stream_frame_parse {
                                 ));
                                 return Ok(output);
                             }
-                            _ => return Err(()),
+                            _ => return Err("other case after no header".to_string()),
                         },
                         Err(data_err) => data = data_err,
                     }
@@ -198,9 +203,9 @@ mod stream_frame_parse {
                     .map_err(|_e| "Failed to build [u8] from vec<u8>".to_string())
             }
 
-            None => data
+            None => data[..HDR_SIZE]
                 .try_into()
-                .map_err(|_e| "Failed to build [u8] from vec<u8>".to_string()),
+                .map_err(|e| format!("[{:?}]", e)),
         };
         output_res
     }
