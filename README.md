@@ -1,5 +1,7 @@
 # Stream Framer
 
+Framing system for streaming protocols written in rust.
+
 ## Purpose
 
 Stream Framer is a Rust crate that provides two traits for adding header prefixes to datagrams:
@@ -13,8 +15,10 @@ I use it in the context of the QUIC protocol (with a http3 frameword based on ``
 - It can handle truncated frames (e.g. a frame that is distributed between two packets).
 
 ## Example 
-
+Add the header (magic number: [u8; 8] + frame len big endian u32: [u8;4]).
 ```rust
+
+
 
  use stream_frame_parse::{FrameParser, ParsedStreamData};
  use stream_frame_writer::FrameWriter;
@@ -23,7 +27,12 @@ I use it in the context of the QUIC protocol (with a http3 frameword based on ``
  let datagram: Vec<u8> = vec![1; 512];
 
  let prefixed_datagram = datagram.prepend_frame();
- 
+ ```
+Then you can parse and handles truncatures :
+```rust
+
+
+
  // states that keep tracks of truncated datas (for header and the frame)
 
  let mut incompleted_stream_data_buffer: Option<(usize, Vec<u8>)> = None; // (frame_size, partial data already received);
@@ -34,6 +43,7 @@ I use it in the context of the QUIC protocol (with a http3 frameword based on ``
 
  let mut output: Vec<Vec<u8>> = vec![];
 
+            // Start parsing, it can output mutiples frames if any.
             match prefixed_datagram.parse_frame_header(
                 incompleted_stream_data_buffer.take(),
                 truncated_header_buffer.take(),
