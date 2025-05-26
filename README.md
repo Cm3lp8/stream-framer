@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Stream Framer presents two traits that can add header prefixes to datagrams:
+Stream Framer is a Rust crate that presents two traits that can add header prefixes to datagrams:
 
 - ```FrameWriter``` prepends a header composed of 8 arbitrary bytes followed by 4 bytes representing in big endian the length of the following frame.
 - ```FrameParser``` gives the method ```parse_frame_header()```to parse incoming packets, pointing on frame starting point and its length.
