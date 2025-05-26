@@ -61,6 +61,7 @@ Then you can parse and handles truncations:
                             }
                             ParsedStreamData::IncompleteWithoutHeaderUnFinished(data) => {
                                 // case when this packet is smaller than the message size
+                                // not implemented yet
                             }
                             ParsedStreamData::TruncatedHeader(truncated_header) => {
                                 // truncated header
