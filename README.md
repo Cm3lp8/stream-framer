@@ -57,16 +57,16 @@ Then you can parse and handles truncations:
                             ParsedStreamData::IncompleteWithHeader(msg_size, data) => {
                                 // this has to be the last
                                 // reserve for the next packet
-                                self.incompleted_stream_data_buffer = Some((msg_size, data));
+                                incompleted_stream_data_buffer = Some((msg_size, data));
                             }
                             ParsedStreamData::IncompleteWithoutHeaderUnFinished(data) => {
                                 // case when this packet is smaller than the message size
                             }
                             ParsedStreamData::TruncatedHeader(truncated_header) => {
                                 // truncated header
-                                match &self.truncated_header_buffer {
+                                match &truncated_header_buffer {
                                     Some(_partial_hdr) => {}
-                                    None => self.truncated_header_buffer = Some(truncated_header),
+                                    None => truncated_header_buffer = Some(truncated_header),
                                 }
                             }
                         }
