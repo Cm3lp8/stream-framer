@@ -7,16 +7,24 @@ use std::{
 pub enum FrameError {
     Io(std::io::Error),
     ParsingError(String),
+    TypeCapacity(String),
+    TypeConversionFailure(String),
 }
 
 impl Display for FrameError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FrameError::ParsingError(err) => {
-                write!(f, "Parsing error : [{:?}]", err)
+                write!(f, "Parsing error : [{err:?}]")
+            }
+            FrameError::TypeCapacity(err) => {
+                write!(f, "TypeCapacity error : [{err:?}]")
+            }
+            FrameError::TypeConversionFailure(err) => {
+                write!(f, "TypeConversionFailure error : [{err:?}]")
             }
             FrameError::Io(e) => {
-                write!(f, "Io error : [{:?}]", e)
+                write!(f, "Io error : [{e:?}]")
             }
         }
     }

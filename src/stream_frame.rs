@@ -3,17 +3,27 @@ pub use stream_frame_writer::FrameWriter;
 const HDR_SIZE: usize = 12; // u32
 const MAGIC_PREFIX: [u8; 8] = [0x00, 0xF1, 0x01, 0xE4, 0x02, 0xFF, 0x03, 0xDD];
 mod stream_frame_writer {
+    use crate::error::FrameError;
+
     use super::MAGIC_PREFIX;
 
     pub trait FrameWriter {
-        fn prepend_frame_in_place(&mut self);
-        fn prepend_frame(self) -> Vec<u8>;
+        /// # Errors
+        /// This returns an errors if the packet length is > to u32 capacity.
+        fn prepend_frame_in_place(&mut self) -> Result<(), FrameError>;
+        /// # Errors
+        /// This returns an errors if the packet length is > to u32 capacity.
+        fn prepend_frame(self) -> Result<Vec<u8>, FrameError>;
     }
 
     impl FrameWriter for Vec<u8> {
-        fn prepend_frame_in_place(&mut self) {
+        fn prepend_frame_in_place(&mut self) -> Result<(), FrameError> {
             // cast to u32 because usize is to large and to suitable (diffence of size between archs)
-            let p_len = self.len() as u32;
+            let Ok(p_len) = u32::try_from(self.len()) else {
+                return Err(FrameError::TypeCapacity(
+                    "Failed to get packet len (is > to u32 capacity)".to_string(),
+                ));
+            };
 
             let mut frame: Vec<u8> = p_len.to_be_bytes().to_vec();
 
@@ -22,34 +32,44 @@ mod stream_frame_writer {
             magic_prefix.append(self);
 
             *self = magic_prefix;
+            Ok(())
         }
-        fn prepend_frame(self) -> Vec<u8> {
+        fn prepend_frame(self) -> Result<Vec<u8>, FrameError> {
             // cast to u32 because usize is to large and to suitable (diffence of size between archs)
-            let p_len = self.len() as u32;
+            let Ok(p_len) = u32::try_from(self.len()) else {
+                return Err(FrameError::TypeCapacity(
+                    "Failed to get packet len (is > to u32 capacity)".to_string(),
+                ));
+            };
 
             let mut magic_prefix = MAGIC_PREFIX.to_vec();
             let mut frame: Vec<u8> = p_len.to_be_bytes().to_vec();
             magic_prefix.append(&mut frame);
             magic_prefix.extend(self);
 
-            magic_prefix
+            Ok(magic_prefix)
         }
     }
 }
 
 mod stream_frame_parse {
+
     use crate::error::FrameError;
 
     use super::{HDR_SIZE, MAGIC_PREFIX};
 
     type BodyLen = usize;
-    type ReceivedSize = usize;
     pub trait FrameParser {
+        /// Parse a stream packet
+        /// # Errors
+        /// Return a String in case something wrong happened in
+        /// slice conversions.
+        ///
         fn parse_frame_header(
             self,
             last_incomplete_reception: Option<(BodyLen, Vec<u8>)>,
             is_last_header_truncated: Option<Vec<u8>>,
-        ) -> Result<Vec<ParsedStreamData>, String>;
+        ) -> Result<Vec<ParsedStreamData>, FrameError>;
     }
 
     pub enum ParsedStreamData {
@@ -75,9 +95,9 @@ mod stream_frame_parse {
             mut self,
             mut last_incomplete_reception: Option<(BodyLen, Vec<u8>)>,
             mut is_last_header_truncated: Option<Vec<u8>>,
-        ) -> Result<Vec<ParsedStreamData>, String> {
+        ) -> Result<Vec<ParsedStreamData>, FrameError> {
             let mut output: Vec<ParsedStreamData> = vec![];
-            let mut data = std::mem::replace(&mut self, vec![]);
+            let mut data = std::mem::take(&mut self);
 
             'parse: loop {
                 // when data is now < HDR_SIZE, implies truncating next header
@@ -94,10 +114,7 @@ mod stream_frame_parse {
                 }
 
                 // vec len is already verified to be  > HDR_SIZE
-                let hdr = match compose_header_candidat(&data, is_last_header_truncated.take()) {
-                    Ok(hdr) => hdr,
-                    Err(e) => return Err(e),
-                };
+                let hdr = compose_header_candidat(&data, is_last_header_truncated.take())?;
 
                 if is_header(&hdr) {
                     // It starts directly with a header :
@@ -109,7 +126,9 @@ mod stream_frame_parse {
                     {
                         e_l
                     } else {
-                        return Err("error decoding header".to_string());
+                        return Err(FrameError::ParsingError(
+                            "error decoding header".to_string(),
+                        ));
                     };
                     let body_total_len = u32::from_be_bytes(encoded_len);
                     let body = data[HDR_SIZE..].to_vec();
@@ -147,40 +166,38 @@ mod stream_frame_parse {
                             ));
                             return Ok(output);
                         }
-                        _ => return Err("Other case".to_string()),
+                        _ => return Err(FrameError::ParsingError("Other case".to_string())),
                     }
-                } else {
-                    // It starts with no hdr.
-                    // case 3: It has 1 header pattern after some bytes.
+                }
+                // It starts with no hdr.
+                // case 3: It has 1 header pattern after some bytes.
 
-                    match has_no_hdr_start(data, last_incomplete_reception.take()) {
-                        Ok(data_parsed) => match data_parsed {
-                            HeaderParsing::OneMessageAndRemains((size, data_wo_hdr), remaining) => {
-                                data = remaining; // TODO handle case 0.0 => See if hdr is
-                                // truncated
-                                output
-                                    .push(ParsedStreamData::CompletedWithHeader(size, data_wo_hdr));
-                            }
-                            // Final case
-                            HeaderParsing::Completed(size, completed_data) => {
-                                output.push(ParsedStreamData::CompletedWithHeader(
-                                    size as usize,
-                                    completed_data,
-                                ));
-                                return Ok(output);
-                            }
-                            HeaderParsing::StartWithNoHeaderAndIncompleted(data) => {
-                                // case 2 => if the msg len > stream len
-                                output.push(ParsedStreamData::IncompleteWithoutHeaderUnFinished(
-                                    data,
-                                ));
-                                return Ok(output);
-                            }
-                            _ => return Err("other case after no header".to_string()),
-                        },
-                        Err(data_err) => data = data_err,
-                    }
-                };
+                match has_no_hdr_start(data, last_incomplete_reception.take()) {
+                    Ok(data_parsed) => match data_parsed {
+                        HeaderParsing::OneMessageAndRemains((size, data_wo_hdr), remaining) => {
+                            data = remaining; // TODO handle case 0.0 => See if hdr is
+                            // truncated
+                            output.push(ParsedStreamData::CompletedWithHeader(size, data_wo_hdr));
+                        }
+                        // Final case
+                        HeaderParsing::Completed(size, completed_data) => {
+                            output
+                                .push(ParsedStreamData::CompletedWithHeader(size, completed_data));
+                            return Ok(output);
+                        }
+                        HeaderParsing::StartWithNoHeaderAndIncompleted(data) => {
+                            // case 2 => if the msg len > stream len
+                            output.push(ParsedStreamData::IncompleteWithoutHeaderUnFinished(data));
+                            return Ok(output);
+                        }
+                        _ => {
+                            return Err(FrameError::ParsingError(
+                                "other case after no header".to_string(),
+                            ));
+                        }
+                    },
+                    Err(data_err) => data = data_err,
+                }
             }
         }
     }
@@ -189,8 +206,8 @@ mod stream_frame_parse {
     fn compose_header_candidat(
         data: &[u8],
         is_last_header_truncated: Option<Vec<u8>>,
-    ) -> Result<[u8; HDR_SIZE], String> {
-        let output_res: Result<[u8; HDR_SIZE], String> = match is_last_header_truncated {
+    ) -> Result<[u8; HDR_SIZE], FrameError> {
+        let output_res: Result<[u8; HDR_SIZE], FrameError> = match is_last_header_truncated {
             Some(mut hdr_prefix) => {
                 let hdr_suffix_len = HDR_SIZE - hdr_prefix.len();
 
@@ -198,14 +215,16 @@ mod stream_frame_parse {
 
                 hdr_prefix.extend(suffix_slice);
 
-                hdr_prefix
-                    .try_into()
-                    .map_err(|_e| "Failed to build [u8] from vec<u8>".to_string())
+                hdr_prefix.try_into().map_err(|_e| {
+                    FrameError::TypeConversionFailure(
+                        "Failed to build [u8] from vec<u8>".to_string(),
+                    )
+                })
             }
 
             None => data[..HDR_SIZE]
                 .try_into()
-                .map_err(|e| format!("[{:?}]", e)),
+                .map_err(|e| FrameError::TypeConversionFailure(format!("[{e:?}]"))),
         };
         output_res
     }
@@ -216,12 +235,11 @@ mod stream_frame_parse {
 
         let has_magic_prefix_slice = &hdr[..MAGIC_PREFIX.len()];
 
-        if has_magic_prefix_slice != &MAGIC_PREFIX {
+        if has_magic_prefix_slice != MAGIC_PREFIX {
             return false;
         }
         true
     }
-    type TruncatedSize = usize;
     enum Truncating {
         Yes(Vec<u8>),
         No(Vec<u8>),
