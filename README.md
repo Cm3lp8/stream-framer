@@ -28,22 +28,22 @@ Add the header (magic number: [u8; 8] + frame len big endian u32: [u8;4]).
 
  let prefixed_datagram = datagram.prepend_frame();
  ```
-Then you can parse and handles truncatures :
+Then you can parse and handles truncations:
 ```rust
 
 
 
- // states that keep tracks of truncated datas (for header and the frame)
+ // states that keep track of truncated datas (for header and the frame)
 
  let mut incompleted_stream_data_buffer: Option<(usize, Vec<u8>)> = None; // (frame_size, partial data already received);
- let mut truncated_header_buffer: Option<Vec<u8>> = None; // The partial header truncated in the precedent packet parsing.
+ let mut truncated_header_buffer: Option<Vec<u8>> = None; // The partial header truncated in the previous packet parsing.
 
 
 
 
  let mut output: Vec<Vec<u8>> = vec![];
 
-            // Start parsing, it can output mutiples frames if any.
+            // Start parsing, it can output mutiple frames if any.
             match prefixed_datagram.parse_frame_header(
                 incompleted_stream_data_buffer.take(),
                 truncated_header_buffer.take(),
