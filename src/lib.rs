@@ -15,7 +15,7 @@
 //! I use it in the context of the QUIC protocol (with a HTTP/3 framework based on ```Quiche``` crate), which garantees data order accuracy.
 //!
 //! ## Example
-//! Add the header (magic number: [u8; 8] + frame len big endian u32: [u8;4]).
+//! Add the header (magic number: 8 bytes + frame len big endian u32: 4 bytes).
 //! ```rust
 //! use stream_frame_parse::{FrameParser, ParsedStreamData};
 //! use stream_frame_writer::FrameWriter;
@@ -32,8 +32,6 @@
 //!
 //! let mut incompleted_stream_data_buffer: Option<(usize, Vec<u8>)> = None; // (frame_size, partial data already received);
 //! let mut truncated_header_buffer: Option<Vec<u8>> = None; // The partial header truncated in the previous packet parsing.
-//!
-//!
 //!
 //!
 //! let mut output: Vec<Vec<u8>> = vec![];
