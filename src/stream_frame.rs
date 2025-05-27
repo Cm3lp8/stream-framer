@@ -1,3 +1,8 @@
+#![allow(clippy::single_match)]
+#![allow(unused_assignments)]
+#![allow(clippy::single_match_else)]
+#![allow(clippy::ref_option)]
+
 pub use stream_frame_parse::{FrameParser, ParsedStreamData};
 pub use stream_frame_writer::FrameWriter;
 pub const HDR_SIZE: usize = 12; // u32
@@ -53,8 +58,6 @@ mod stream_frame_writer {
 }
 
 mod stream_frame_parse {
-
-    use core::panic;
 
     use crate::error::FrameError;
 
@@ -115,7 +118,7 @@ mod stream_frame_parse {
                     &mut is_last_header_truncated,
                 ) {
                     Truncating::Yes(truncated_hdr) => {
-                        if truncated_hdr.len() > 0 {
+                        if !truncated_hdr.is_empty() {
                             output.push(ParsedStreamData::TruncatedHeader(truncated_hdr));
                         }
                         return Ok(output);
@@ -237,7 +240,7 @@ mod stream_frame_parse {
                         }
                     }
 
-                    let hdr: [u8; HDR_SIZE] = hdr_prefix[..HDR_SIZE].try_into().map_err(|e| {
+                    let hdr: [u8; HDR_SIZE] = hdr_prefix[..HDR_SIZE].try_into().map_err(|_e| {
                         FrameError::TypeConversionFailure(
                             "Failed to build [u8] from vec<u8>".to_string(),
                         )
@@ -278,14 +281,10 @@ mod stream_frame_parse {
         is_last_header_truncated: &mut Option<Vec<u8>>,
     ) -> Truncating {
         match last_incomplete_reception {
-            Some((size, data_received)) => {
+            Some((_size, data_received)) => {
                 //  if size - data_received.len() > data.len() {
                 let is_start_of_stream =
-                    if data_received.len() == 0 && is_last_header_truncated.is_some() {
-                        true
-                    } else {
-                        false
-                    };
+                    data_received.is_empty() && is_last_header_truncated.is_some();
                 return Truncating::No((data, is_start_of_stream));
                 // }
             }
