@@ -1,6 +1,6 @@
 [package]
 name = "stream_framer"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["Camille Le Pennec camille.lpennec@gmail.com"]
 description = "Simple crate to add framing capacity to datagram"
