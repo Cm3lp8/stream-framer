@@ -17,8 +17,8 @@
 //! ## Example
 //! Add the header (magic number: 8 bytes + frame len big endian u32: 4 bytes).
 //! ```rust
-//! use stream_frame_parse::{FrameParser, ParsedStreamData};
-//! use stream_frame_writer::FrameWriter;
+//! use stream_framer::{FrameParser, ParsedStreamData};
+//! use stream_framer::FrameWriter;
 //!
 //! // Vec<u8> implements FrameParser and FrameWriter.
 //! let datagram: Vec<u8> = vec![1; 512];
@@ -28,8 +28,8 @@
 //!
 //! Then you can parse and handle truncations:
 //! ```rust
-//! use stream_frame_parse::{FrameParser, ParsedStreamData};
-//! use stream_frame_writer::FrameWriter;
+//! use stream_framer::{FrameParser, ParsedStreamData};
+//! use stream_framer::FrameWriter;
 //! // states that keep track of truncated datas (for header and the frame)
 //!
 //! let mut incompleted_stream_data_buffer: Option<(usize, Vec<u8>)> = None; // (frame_size, partial data already received);
