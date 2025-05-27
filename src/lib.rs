@@ -37,7 +37,7 @@
 //!
 //! let datagram: Vec<u8> = vec![1; 512];
 //!
-//! let prefixed_datagram = datagram.prepend_frame();
+//! let prefixed_datagram = datagram.prepend_frame().expect("failed to prepend frame");
 //!
 //! let mut output: Vec<Vec<u8>> = vec![];
 //!
