@@ -2,6 +2,15 @@
 name = "stream_framer"
 version = "0.2.0"
 edition = "2024"
+authors = ["Camille Le Pennec camille.lpennec@gmail.com"]
+description = "Simple crate to add framing capacity to datagram"
+license = "MIT OR Apache-2.0"
+keywords = ["framing", "datagram", "networking"]
+categories = ["network-programming", "encoding"]
+repository = "https://github.com/Cm3lp8/stream-framer"
+readme = "README.md"
+homepage = "https://github.com/Cm3lp8/stream-framer"
+documentation = "https://docs.rs/stream-framer"
 
 [dev-dependencies]
 crossbeam = "0.8.4"
