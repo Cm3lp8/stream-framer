@@ -6,7 +6,7 @@ Framing system for streaming protocols.
 
 Stream Framer is a Rust crate that provides two traits for adding header prefixes to datagrams:
 
-- ```FrameWriter``` prepends a header composed of 8 arbitrary bytes followed by 4 bytes representing (in big endian) the length of the following frame.
+- ```FrameWriter``` provides methods to prepends a header composed of 8 arbitrary bytes followed by 4 bytes representing (in big endian) the length of the following frame.
 - ```FrameParser``` provides the method ```parse_frame_header()```to parse incoming packets, indicating the frame's starting point and its length.
 
 ## Disclaimers
@@ -17,9 +17,6 @@ I use it in the context of the QUIC protocol (with a HTTP/3 framework based on `
 ## Example 
 Add the header (magic number: [u8; 8] + frame len big endian u32: [u8;4]).
 ```rust
-
-
-
  use stream_frame_parse::{FrameParser, ParsedStreamData};
  use stream_frame_writer::FrameWriter;
 
@@ -30,9 +27,6 @@ Add the header (magic number: [u8; 8] + frame len big endian u32: [u8;4]).
  ```
 Then you can parse and handle truncations:
 ```rust
-
-
-
  // states that keep track of truncated datas (for header and the frame)
 
  let mut incompleted_stream_data_buffer: Option<(usize, Vec<u8>)> = None; // (frame_size, partial data already received);
