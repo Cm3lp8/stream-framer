@@ -1,7 +1,7 @@
 pub use stream_frame_parse::{FrameParser, ParsedStreamData};
 pub use stream_frame_writer::FrameWriter;
-const HDR_SIZE: usize = 12; // u32
-const MAGIC_PREFIX: [u8; 8] = [0x00, 0xF1, 0x01, 0xE4, 0x02, 0xFF, 0x03, 0xDD];
+pub const HDR_SIZE: usize = 12; // u32
+pub const MAGIC_PREFIX: [u8; 8] = [0x00, 0xF1, 0x01, 0xE4, 0x02, 0xFF, 0x03, 0xDD];
 mod stream_frame_writer {
     use crate::error::FrameError;
 
@@ -54,6 +54,8 @@ mod stream_frame_writer {
 
 mod stream_frame_parse {
 
+    use core::panic;
+
     use crate::error::FrameError;
 
     use super::{HDR_SIZE, MAGIC_PREFIX};
@@ -72,11 +74,11 @@ mod stream_frame_parse {
         ) -> Result<Vec<ParsedStreamData>, FrameError>;
     }
 
+    type MessageSize = usize;
     pub enum ParsedStreamData {
-        IncompleteWithoutHeaderUnFinished(Vec<u8>),
-        CompletedWithHeader(usize, Vec<u8>),
-        IncompleteWithHeader(usize, Vec<u8>),
-        TruncatedHeader(Vec<u8>),
+        Completed(Vec<u8>),
+        Incompleted(MessageSize, Vec<u8>),
+        TruncatedHeader(Vec<u8>), // bool +> end of stream
     }
 
     enum HeaderParsing {
@@ -84,7 +86,7 @@ mod stream_frame_parse {
         OneMessageAndRemains((usize, Vec<u8>), Vec<u8>), // (size_first_msg, data_first_message),
         // remaining data
         DataTooLittle(Vec<u8>),
-        StartWithNoHeaderAndIncompleted(Vec<u8>), // (no header data bytes
+        StartWithNoHeaderAndIncompleted(MessageSize, Vec<u8>), // (no header data bytes
         // size, data_without_header), Option<(hdr->data_size, next_data)>
         None,
     }
@@ -98,96 +100,104 @@ mod stream_frame_parse {
         ) -> Result<Vec<ParsedStreamData>, FrameError> {
             let mut output: Vec<ParsedStreamData> = vec![];
             let mut data = std::mem::take(&mut self);
+            let data_len = data.len();
 
             'parse: loop {
+                if data_len == 0 {
+                    break 'parse Ok(output);
+                }
+                let mut start_of_stream = false;
                 // when data is now < HDR_SIZE, implies truncating next header
                 // what if is_last_header_truncated is_some() ? (To resolve)
-                match is_data_size_truncating_next_header(data) {
+                match is_data_size_truncating_next_header(
+                    data,
+                    &last_incomplete_reception,
+                    &mut is_last_header_truncated,
+                ) {
                     Truncating::Yes(truncated_hdr) => {
-                        output.push(ParsedStreamData::TruncatedHeader(truncated_hdr));
+                        if truncated_hdr.len() > 0 {
+                            output.push(ParsedStreamData::TruncatedHeader(truncated_hdr));
+                        }
                         return Ok(output);
                     }
 
-                    Truncating::No(data_continue) => {
+                    Truncating::No((data_continue, s_o_s)) => {
                         data = data_continue;
+                        start_of_stream = s_o_s;
                     }
                 }
 
                 // vec len is already verified to be  > HDR_SIZE
-                let hdr = compose_header_candidat(&data, is_last_header_truncated.take())?;
 
-                if is_header(&hdr) {
-                    // It starts directly with a header :
-                    // case 0: total_len == body_len,
-                    // case 1: total_len > body_len,
-                    // case 2: total_len < body_len.
+                if start_of_stream {
+                    let (corriged_hdr_len, hdr) =
+                        compose_header_candidat(&data, is_last_header_truncated.take())?;
 
-                    let encoded_len: [u8; 4] = if let Ok(e_l) = hdr[MAGIC_PREFIX.len()..].try_into()
-                    {
-                        e_l
-                    } else {
-                        return Err(FrameError::ParsingError(
-                            "error decoding header".to_string(),
-                        ));
-                    };
-                    let body_total_len = u32::from_be_bytes(encoded_len);
-                    let body = data[HDR_SIZE..].to_vec();
+                    if is_header(&hdr) {
+                        // It starts directly with a header :
+                        // case 0: total_len == body_len,
+                        // case 1: total_len > body_len,
+                        // case 2: total_len < body_len.
 
-                    match has_hdr_first(body_total_len as usize, body) {
-                        // final case, return.
-                        HeaderParsing::Completed(_size, completed_data) => {
-                            output.push(ParsedStreamData::CompletedWithHeader(
-                                body_total_len as usize,
-                                completed_data,
-                            ));
-                            return Ok(output);
+                        let encoded_len: [u8; 4] =
+                            if let Ok(e_l) = hdr[MAGIC_PREFIX.len()..].try_into() {
+                                e_l
+                            } else {
+                                return Err(FrameError::ParsingError(
+                                    "error decoding header".to_string(),
+                                ));
+                            };
+                        let body_total_len = u32::from_be_bytes(encoded_len);
+                        let body = data[corriged_hdr_len..].to_vec();
+
+                        match has_hdr_first(body_total_len as usize, body) {
+                            // final case, return.
+                            HeaderParsing::Completed(_size, completed_data) => {
+                                output.push(ParsedStreamData::Completed(completed_data));
+                                return Ok(output);
+                            }
+                            // One first message completed, and remaining data, continue parsing
+                            HeaderParsing::OneMessageAndRemains(
+                                (_first_msg_size, first_msg_data),
+                                remaining_data,
+                            ) => {
+                                data = remaining_data; // check if remaining data is > hdr size
+                                output.push(ParsedStreamData::Completed(first_msg_data));
+
+                                continue 'parse;
+                            }
+                            // Final case
+                            HeaderParsing::DataTooLittle(data) => {
+                                // Is inferior to the announced body len : the remaining will be in the
+                                // next server push, which will have no hdr
+
+                                output.push(ParsedStreamData::Incompleted(
+                                    body_total_len as usize,
+                                    data,
+                                ));
+                                return Ok(output);
+                            }
+                            _ => return Err(FrameError::ParsingError("Other case".to_string())),
                         }
-                        // One first message completed, and remaining data, continue parsing
-                        HeaderParsing::OneMessageAndRemains(
-                            (first_msg_size, first_msg_data),
-                            remaining_data,
-                        ) => {
-                            data = remaining_data; // check if remaining data is > hdr size
-                            output.push(ParsedStreamData::CompletedWithHeader(
-                                first_msg_size,
-                                first_msg_data,
-                            ));
-
-                            continue 'parse;
-                        }
-                        // Final case
-                        HeaderParsing::DataTooLittle(data) => {
-                            // Is inferior to the announced body len : the remaining will be in the
-                            // next server push, which will have no hdr
-
-                            output.push(ParsedStreamData::IncompleteWithHeader(
-                                body_total_len as usize,
-                                data,
-                            ));
-                            return Ok(output);
-                        }
-                        _ => return Err(FrameError::ParsingError("Other case".to_string())),
                     }
+                    // It starts with no hdr.
+                    // case 3: It has 1 header pattern after some bytes.
                 }
-                // It starts with no hdr.
-                // case 3: It has 1 header pattern after some bytes.
-
                 match has_no_hdr_start(data, last_incomplete_reception.take()) {
                     Ok(data_parsed) => match data_parsed {
-                        HeaderParsing::OneMessageAndRemains((size, data_wo_hdr), remaining) => {
+                        HeaderParsing::OneMessageAndRemains((_size, data_wo_hdr), remaining) => {
                             data = remaining; // TODO handle case 0.0 => See if hdr is
                             // truncated
-                            output.push(ParsedStreamData::CompletedWithHeader(size, data_wo_hdr));
+                            output.push(ParsedStreamData::Completed(data_wo_hdr));
                         }
                         // Final case
-                        HeaderParsing::Completed(size, completed_data) => {
-                            output
-                                .push(ParsedStreamData::CompletedWithHeader(size, completed_data));
+                        HeaderParsing::Completed(_size, completed_data) => {
+                            output.push(ParsedStreamData::Completed(completed_data));
                             return Ok(output);
                         }
-                        HeaderParsing::StartWithNoHeaderAndIncompleted(data) => {
+                        HeaderParsing::StartWithNoHeaderAndIncompleted(message_size, data) => {
                             // case 2 => if the msg len > stream len
-                            output.push(ParsedStreamData::IncompleteWithoutHeaderUnFinished(data));
+                            output.push(ParsedStreamData::Incompleted(message_size, data));
                             return Ok(output);
                         }
                         _ => {
@@ -201,31 +211,48 @@ mod stream_frame_parse {
             }
         }
     }
+
+    type SuffixLen = usize;
     // verify if there is already a truncated header from the last packet. If yes compose a header
     // with it, if no, output header size Vec<u8>
     fn compose_header_candidat(
         data: &[u8],
         is_last_header_truncated: Option<Vec<u8>>,
-    ) -> Result<[u8; HDR_SIZE], FrameError> {
-        let output_res: Result<[u8; HDR_SIZE], FrameError> = match is_last_header_truncated {
-            Some(mut hdr_prefix) => {
-                let hdr_suffix_len = HDR_SIZE - hdr_prefix.len();
+    ) -> Result<(SuffixLen, [u8; HDR_SIZE]), FrameError> {
+        let output_res: Result<(SuffixLen, [u8; HDR_SIZE]), FrameError> =
+            match is_last_header_truncated {
+                Some(mut hdr_prefix) => {
+                    let mut hdr_suffix_len = 0;
+                    if hdr_prefix.len() >= HDR_SIZE {
+                        hdr_suffix_len = HDR_SIZE;
+                    } else {
+                        hdr_suffix_len = HDR_SIZE - hdr_prefix.len();
 
-                let suffix_slice = data[0..hdr_suffix_len].to_vec();
+                        if hdr_suffix_len != 0 {
+                            let suffix_slice = data[0..hdr_suffix_len].to_vec();
+                            hdr_prefix.extend(suffix_slice);
+                        } else {
+                            hdr_suffix_len = HDR_SIZE;
+                        }
+                    }
 
-                hdr_prefix.extend(suffix_slice);
+                    let hdr: [u8; HDR_SIZE] = hdr_prefix[..HDR_SIZE].try_into().map_err(|e| {
+                        FrameError::TypeConversionFailure(
+                            "Failed to build [u8] from vec<u8>".to_string(),
+                        )
+                    })?;
 
-                hdr_prefix.try_into().map_err(|_e| {
-                    FrameError::TypeConversionFailure(
-                        "Failed to build [u8] from vec<u8>".to_string(),
-                    )
-                })
-            }
+                    Ok((hdr_suffix_len, hdr))
+                }
 
-            None => data[..HDR_SIZE]
-                .try_into()
-                .map_err(|e| FrameError::TypeConversionFailure(format!("[{e:?}]"))),
-        };
+                None => {
+                    let hdr: [u8; HDR_SIZE] = data[..HDR_SIZE]
+                        .try_into()
+                        .map_err(|e| FrameError::TypeConversionFailure(format!("[{e:?}]")))?;
+
+                    Ok((HDR_SIZE, hdr))
+                }
+            };
         output_res
     }
     fn is_header(hdr: &[u8]) -> bool {
@@ -242,13 +269,55 @@ mod stream_frame_parse {
     }
     enum Truncating {
         Yes(Vec<u8>),
-        No(Vec<u8>),
+        No((Vec<u8>, bool)), // end of stream
     }
-    fn is_data_size_truncating_next_header(data: Vec<u8>) -> Truncating {
+    fn is_data_size_truncating_next_header(
+        data: Vec<u8>,
+        last_incomplete_reception: &Option<(BodyLen, Vec<u8>)>,
+        is_last_header_truncated: &mut Option<Vec<u8>>,
+    ) -> Truncating {
+        match last_incomplete_reception {
+            Some((size, data_received)) => {
+                //  if size - data_received.len() > data.len() {
+                let is_start_of_stream =
+                    if data_received.len() == 0 && is_last_header_truncated.is_some() {
+                        true
+                    } else {
+                        false
+                    };
+                return Truncating::No((data, is_start_of_stream));
+                // }
+            }
+            None => {}
+        }
         if data.len() < HDR_SIZE {
-            Truncating::Yes(data)
+            match is_last_header_truncated {
+                Some(previous_truncation) => {
+                    if previous_truncation.len() >= HDR_SIZE {
+                        return Truncating::No((data, true));
+                    }
+                    let mut previous_extended = previous_truncation.clone();
+                    let previous_len = previous_extended.len();
+                    let len_max = HDR_SIZE - previous_len;
+
+                    if data.len() < len_max {
+                        previous_extended.extend_from_slice(&data);
+                    } else {
+                        previous_extended.extend_from_slice(&data[..len_max]);
+                    }
+
+                    *previous_truncation = previous_extended;
+                    if previous_truncation.len() == HDR_SIZE {
+                        previous_truncation.extend_from_slice(&data[len_max..]);
+                        Truncating::No((previous_truncation.clone(), true))
+                    } else {
+                        Truncating::Yes(previous_truncation.clone())
+                    }
+                }
+                None => Truncating::Yes(data),
+            }
         } else {
-            Truncating::No(data)
+            Truncating::No((data, true))
         }
     }
     fn has_no_hdr_start(
@@ -280,6 +349,7 @@ mod stream_frame_parse {
                 already_received.extend(data);
                 // Is extending the last packet 's data
                 Ok(HeaderParsing::StartWithNoHeaderAndIncompleted(
+                    msg_len,
                     already_received,
                 ))
             }
