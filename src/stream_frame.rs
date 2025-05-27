@@ -148,6 +148,7 @@ mod stream_frame_parse {
                                 ));
                             };
                         let body_total_len = u32::from_be_bytes(encoded_len);
+
                         let body = data[corriged_hdr_len..].to_vec();
 
                         match has_hdr_first(body_total_len as usize, body) {

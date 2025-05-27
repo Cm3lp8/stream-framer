@@ -9,6 +9,7 @@ pub enum FrameError {
     ParsingError(String),
     TypeCapacity(String),
     TypeConversionFailure(String),
+    MessageEmpty,
 }
 
 impl Display for FrameError {
@@ -22,6 +23,9 @@ impl Display for FrameError {
             }
             FrameError::TypeConversionFailure(err) => {
                 write!(f, "TypeConversionFailure error : [{err:?}]")
+            }
+            FrameError::MessageEmpty => {
+                write!(f, " Error ! Message empty ! ")
             }
             FrameError::Io(e) => {
                 write!(f, "Io error : [{e:?}]")

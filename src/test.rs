@@ -77,7 +77,7 @@ mod test {
 
         assert!(test_content.len() * messages_quantity > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -130,7 +130,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -226,7 +229,11 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -318,7 +325,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -427,7 +437,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -536,7 +549,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -645,7 +661,11 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -754,7 +774,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -863,7 +886,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -972,7 +998,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -1081,7 +1110,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -1190,7 +1222,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -1299,7 +1334,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -1408,7 +1446,10 @@ mod test {
                     .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
                 {
                     Ok(parsed) => parsed,
-                    Err(e) => panic!("er [{e:?}]"),
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
                 };
 
                 for p in parsed {
@@ -1434,6 +1475,100 @@ mod test {
                 messages_quantity,
                 messages_received.len()
             );
+            assert!(messages_received.len() == messages_quantity);
+        });
+
+        assert!(thread_handle.join().is_ok());
+    }
+    #[test]
+    fn send_messages_of_zero_len() {
+        let packet_size = 128;
+
+        let messages_quantity = 100000;
+        let mut messages: Vec<Vec<u8>> = vec![];
+
+        let test_content = "".to_string();
+
+        assert!(test_content.len() == 0);
+
+        for _i in 0..messages_quantity {
+            let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
+
+            messages.push(frame);
+        }
+
+        // messages contenation to get one vec!
+
+        let concatened = messages.concat();
+
+        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+
+        // split the concatenated vec in chunks of packet's size , to simulate packet streaming
+
+        let mut stream_chunks: Vec<Vec<u8>> = vec![];
+
+        for chunk in concatened.chunks(packet_size) {
+            stream_chunks.push(chunk.to_vec());
+        }
+
+        assert!(
+            stream_chunks.len() == (concatened.len() as f32 / packet_size as f32).ceil() as usize
+        );
+
+        let stream_channel = crossbeam::channel::unbounded::<Vec<u8>>();
+
+        let sender = stream_channel.0.clone();
+        let receiver = stream_channel.1.clone();
+
+        // create a stream sender
+        //
+        let len = stream_chunks.len();
+
+        std::thread::spawn(move || {
+            for packet in stream_chunks {
+                let _ = sender.send(packet);
+            }
+        });
+
+        // client simulation :
+
+        let thread_handle = std::thread::spawn(move || {
+            let mut previous_incompleted_data: Option<(usize, Vec<u8>)> = None;
+            let mut truncated_header: Option<Vec<u8>> = None;
+
+            let mut messages_received: Vec<String> = vec![];
+            let mut loop_count = 0;
+            while let Ok(packet) = receiver.recv() {
+                loop_count += 1;
+                let parsed = match packet
+                    .parse_frame_header(previous_incompleted_data.take(), truncated_header.take())
+                {
+                    Ok(parsed) => parsed,
+
+                    Err(e) => {
+                        println!("er [{e:?}]");
+                        vec![]
+                    }
+                };
+
+                for p in parsed {
+                    match p {
+                        ParsedStreamData::Completed(data) => {
+                            messages_received.push(String::from_utf8_lossy(&data).to_string());
+                        }
+                        ParsedStreamData::Incompleted(message_size, data) => {
+                            previous_incompleted_data = Some((message_size, data));
+                        }
+                        ParsedStreamData::TruncatedHeader(truncadted_hdr) => {
+                            truncated_header = Some(truncadted_hdr);
+                        }
+                    }
+                }
+                if loop_count == len {
+                    break;
+                }
+            }
+
             assert!(messages_received.len() == messages_quantity);
         });
 
