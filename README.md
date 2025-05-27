@@ -11,7 +11,7 @@ Stream Framer is a Rust crate that provides two traits for adding header prefixe
 
 ## Disclaimers
 - It is a very simplistic crate that currently have no mechanism to handle data coming in a corrupted order.
-I use it in the context of the QUIC protocol (with a HTTP/3 framework based on ```Quiche``` crate), which garantees data order accurracy.
+I use it in the context of the QUIC protocol (with a HTTP/3 framework based on ```Quiche``` crate), which garantees data order accuracy.
 - It can handle truncated frames (e.g. a frame that is distributed between two packets).
 
 ## Example 
@@ -28,7 +28,7 @@ Add the header (magic number: [u8; 8] + frame len big endian u32: [u8;4]).
 
  let prefixed_datagram = datagram.prepend_frame();
  ```
-Then you can parse and handles truncations:
+Then you can parse and handle truncations:
 ```rust
 
 
@@ -43,7 +43,7 @@ Then you can parse and handles truncations:
 
  let mut output: Vec<Vec<u8>> = vec![];
 
-            // Start parsing, it can output mutiple frames if any.
+            // Start parsing, it can output multiple frames if any.
             match prefixed_datagram.parse_frame_header(
                 incompleted_stream_data_buffer.take(),
                 truncated_header_buffer.take(),
@@ -61,7 +61,7 @@ Then you can parse and handles truncations:
                                    incompleted_stream_data_buffer = Some(size, data);
 
                                }
-                               ParsedStreamData::TruncatedHeader(truncadeted_hdr) => {
+                               ParsedStreamData::TruncatedHeader(truncated_hdr) => {
 
                                    truncated_header_buffer = Some(truncated_hdr);
 
