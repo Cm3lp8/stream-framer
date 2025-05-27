@@ -35,6 +35,9 @@
 //! let mut incompleted_stream_data_buffer: Option<(usize, Vec<u8>)> = None; // (frame_size, partial data already received);
 //! let mut truncated_header_buffer: Option<Vec<u8>> = None; // The partial header truncated in the previous packet parsing.
 //!
+//! let datagram: Vec<u8> = vec![1; 512];
+//!
+//! let prefixed_datagram = datagram.prepend_frame();
 //!
 //! let mut output: Vec<Vec<u8>> = vec![];
 //!
@@ -54,7 +57,7 @@
 //!                               }
 //!                               ParsedStreamData::Incompleted(size, data) => {
 //!
-//!                                   incompleted_stream_data_buffer = Some(size, data);
+//!                                   incompleted_stream_data_buffer = Some((size, data));
 //!
 //!                               }
 //!                               ParsedStreamData::TruncatedHeader(truncated_hdr) => {
