@@ -1,11 +1,7 @@
 #[cfg(test)]
-mod test {
+mod test_cases {
 
     use core::panic;
-    use std::{
-        sync::{Arc, atomic::AtomicUsize},
-        time::Duration,
-    };
 
     use crate::{
         FrameParser, FrameWriter, ParsedStreamData,
@@ -21,7 +17,7 @@ mod test {
 
         let test_body_len = test_body.len();
 
-        let Ok(mut frame) = test_body.prepend_frame() else {
+        let Ok(frame) = test_body.prepend_frame() else {
             panic!("failed to prepend frame")
         };
 
@@ -43,9 +39,7 @@ mod test {
 
         let test_body_len = test_body.len();
 
-        let mut frame = test_body.prepend_frame().unwrap();
-
-        let frame_len = frame.len();
+        let frame = test_body.prepend_frame().unwrap();
 
         let mut truncated_header: Option<Vec<u8>> = None;
         let mut previous_incompleted_data: Option<(usize, Vec<u8>)> = None;
@@ -61,8 +55,8 @@ mod test {
                     assert!(data.len() == test_body_len);
                     assert!(String::from_utf8_lossy(&data) == input);
                 }
-                ParsedStreamData::Incompleted(size, data) => {}
-                ParsedStreamData::TruncatedHeader(truncadeted_hdr) => {}
+                ParsedStreamData::Incompleted(_size, _data) => {}
+                ParsedStreamData::TruncatedHeader(_truncadeted_hdr) => {}
             }
         }
     }
@@ -87,7 +81,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -176,7 +170,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -186,7 +180,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -271,7 +265,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -281,7 +275,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -372,7 +366,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -382,7 +376,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -484,7 +478,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -494,7 +488,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -596,7 +590,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -606,7 +600,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -709,7 +703,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -719,7 +713,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -821,7 +815,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -831,7 +825,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -933,7 +927,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -943,7 +937,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -1045,7 +1039,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -1055,7 +1049,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -1157,7 +1151,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -1167,7 +1161,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -1269,7 +1263,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -1279,7 +1273,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -1381,7 +1375,7 @@ mod test {
         assert!(test_content.len() * messages_quantity > packet_size);
         assert!(test_content.len() > packet_size);
 
-        for i in 0..messages_quantity {
+        for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
 
             messages.push(frame);
@@ -1391,7 +1385,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -1489,7 +1483,7 @@ mod test {
 
         let test_content = "".to_string();
 
-        assert!(test_content.len() == 0);
+        assert!(test_content.is_empty());
 
         for _i in 0..messages_quantity {
             let frame = test_content.as_bytes().to_vec().prepend_frame().unwrap();
@@ -1501,7 +1495,7 @@ mod test {
 
         let concatened = messages.concat();
 
-        assert!(concatened.len() == (test_content.as_bytes().len() + HDR_SIZE) * messages_quantity);
+        assert!(concatened.len() == (test_content.len() + HDR_SIZE) * messages_quantity);
 
         // split the concatenated vec in chunks of packet's size , to simulate packet streaming
 
@@ -1578,8 +1572,6 @@ mod test {
     fn send_messages_of_randomlen() {
         let mut count = 1000;
         while count != 0 {
-            let packet_size = 128;
-
             let messages_quantity = 100;
             let mut messages: Vec<Vec<u8>> = vec![];
 
