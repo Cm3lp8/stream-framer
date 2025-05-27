@@ -1574,4 +1574,106 @@ mod test {
 
         assert!(thread_handle.join().is_ok());
     }
+    #[test]
+    fn send_messages_of_randomlen() {
+        let mut count = 1000;
+        while count != 0 {
+            let packet_size = 128;
+
+            let messages_quantity = 100;
+            let mut messages: Vec<Vec<u8>> = vec![];
+
+            let test_content = "Lorem ipsum dolor sit amet, officia excepteur ex fugiat reprehenderit enim labore culpa sint ad nisi Lorem pariatur mollit ex esse exercitation amet. Nisi anim cupidatat excepteur officia. Reprehenderit nostrud nostrud ipsum Lorem est aliquip amet voluptate voluptate dolor minim nulla est proident. Nostrud officia pariatur ut officia. Sit irure elit esse ea nulla sunt ex occaecat reprehenderit commodo officia dolor Lorem duis laboris cupidatat officia voluptate. Culpa proident adipisicing id nulla nisi laboris ex in Lorem sunt duis officia eiusmod. Aliqua reprehenderit commodo ex non excepteur duis sunt velit enim. Voluptate laboris sint cupidatat ullamco ut ea consectetur et est culpa et culpa duis.".to_string();
+
+            use rand::prelude::*;
+
+            let mut rng = rand::rng();
+
+            for _i in 0..messages_quantity {
+                let frame = test_content.as_bytes()[..rng.random_range(..555)]
+                    .to_vec()
+                    .prepend_frame()
+                    .unwrap();
+
+                messages.push(frame);
+            }
+
+            // messages contenation to get one vec!
+
+            let concatened = messages.concat();
+
+            // split the concatenated vec in chunks of packet's size , to simulate packet streaming
+
+            let mut stream_chunks: Vec<Vec<u8>> = vec![];
+
+            let concatened_size = concatened.len();
+            println!("[{concatened_size}] chunksize");
+            let size = rng.random_range(1..8192);
+            println!("[{size}] chunksize");
+            for chunk in concatened.chunks(size) {
+                stream_chunks.push(chunk.to_vec());
+            }
+
+            let stream_channel = crossbeam::channel::unbounded::<Vec<u8>>();
+
+            let sender = stream_channel.0.clone();
+            let receiver = stream_channel.1.clone();
+
+            // create a stream sender
+            //
+            let len = stream_chunks.len();
+
+            std::thread::spawn(move || {
+                for packet in stream_chunks {
+                    let _ = sender.send(packet);
+                }
+            });
+
+            // client simulation :
+
+            let thread_handle = std::thread::spawn(move || {
+                let mut previous_incompleted_data: Option<(usize, Vec<u8>)> = None;
+                let mut truncated_header: Option<Vec<u8>> = None;
+
+                let mut messages_received: Vec<String> = vec![];
+                let mut loop_count = 0;
+                while let Ok(packet) = receiver.recv() {
+                    loop_count += 1;
+                    let parsed = match packet.parse_frame_header(
+                        previous_incompleted_data.take(),
+                        truncated_header.take(),
+                    ) {
+                        Ok(parsed) => parsed,
+
+                        Err(e) => {
+                            println!("er [{e:?}]");
+                            vec![]
+                        }
+                    };
+
+                    for p in parsed {
+                        match p {
+                            ParsedStreamData::Completed(data) => {
+                                messages_received.push(String::from_utf8_lossy(&data).to_string());
+                            }
+                            ParsedStreamData::Incompleted(message_size, data) => {
+                                previous_incompleted_data = Some((message_size, data));
+                            }
+                            ParsedStreamData::TruncatedHeader(truncadted_hdr) => {
+                                truncated_header = Some(truncadted_hdr);
+                            }
+                        }
+                    }
+                    if loop_count == len {
+                        break;
+                    }
+                }
+
+                assert!(messages_received.len() == messages_quantity);
+            });
+
+            assert!(thread_handle.join().is_ok());
+            count -= 1;
+        }
+    }
 }

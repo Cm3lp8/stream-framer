@@ -5,3 +5,4 @@ edition = "2024"
 
 [dev-dependencies]
 crossbeam = "0.8.4"
+rand = "0.9.1"
