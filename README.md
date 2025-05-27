@@ -51,26 +51,22 @@ Then you can parse and handles truncations:
                 Ok(parsing_res) => {
                     for parsed in parsing_res {
                         match parsed {
-                            ParsedStreamData::CompletedWithHeader(msg_size, data) => {
-                                output.push(data);
-                            }
-                            ParsedStreamData::IncompleteWithHeader(msg_size, data) => {
-                                // this has to be the last
-                                // reserve for the next packet
-                                incompleted_stream_data_buffer = Some((msg_size, data));
-                            }
-                            ParsedStreamData::IncompleteWithoutHeaderUnFinished(data) => {
-                                // case when this packet is smaller than the message size
-                                // not implemented yet
-                            }
-                            ParsedStreamData::TruncatedHeader(truncated_header) => {
-                                // truncated header
-                                match &truncated_header_buffer {
-                                    Some(_partial_hdr) => {}
-                                    None => truncated_header_buffer = Some(truncated_header),
-                                }
-                            }
-                        }
+                               ParsedStreamData::Completed(data) => {
+
+                                   output.push(data);
+
+                               }
+                               ParsedStreamData::Incompleted(size, data) => {
+
+                                   incompleted_stream_data_buffer = Some(size, data);
+
+                               }
+                               ParsedStreamData::TruncatedHeader(truncadeted_hdr) => {
+
+                                   truncated_header_buffer = Some(truncated_hdr);
+
+                               }
+                      }
                     }
                 }
                 Err(e) => {
