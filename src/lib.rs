@@ -12,7 +12,8 @@
 //! ## Disclaimers
 //! - It is a very simplistic crate that currently have no mechanism to handle data coming in a corrupted order.
 //! - It can handle truncated frames (e.g. a frame that is distributed between two packets).
-//! I use it in the context of the QUIC protocol (with a HTTP/3 framework based on ```Quiche``` crate), which garantees data order accuracy.
+//!
+//!     I use it in the context of the QUIC protocol (with a HTTP/3 framework based on ```Quiche``` crate), which garantees data order accuracy.
 //!
 //! ## Example
 //! Add the header (magic number: 8 bytes + frame len big endian u32: 4 bytes).
